@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FeedGen — AI Feed Text Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">⚡</span>
+                <span class="logo-text">FeedGen</span>
+                <span class="version">v2.0</span>
+            </div>
+            <p class="tagline">AI-генератор заголовків та описів для товарних фідів</p>
+        </header>
+
+        <main>
+            <!-- STEP 1: Upload -->
+            <section id="step-upload" class="step active">
+                <div class="step-header">
+                    <span class="step-num">01</span>
+                    <h2>Завантаж фід</h2>
+                </div>
+                <div class="upload-zone" id="dropzone">
+                    <div class="upload-content">
+                        <div class="upload-icon">📄</div>
+                        <p>Перетягни .xlsx файл сюди</p>
+                        <p class="upload-hint">або натисни для вибору</p>
+                        <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+                    </div>
+                </div>
+                <div id="file-info" class="file-info hidden">
+                    <div class="file-stats"></div>
+                    <div id="detected-cols" class="detected-cols"></div>
+                </div>
+            </section>
+
+            <!-- STEP 2: Config -->
+            <section id="step-config" class="step hidden">
+                <div class="step-header">
+                    <span class="step-num">02</span>
+                    <h2>Налаштуй генерацію</h2>
+                </div>
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h3>Модель</h3>
+                        <select id="model-select">
+                            <option value="claude-sonnet-4-20250514">Claude Sonnet 4 — баланс якості і ціни</option>
+                            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 — швидко і дешево</option>
+                        </select>
+                        <p class="model-hint" id="cache-hint">✓ Prompt caching увімкнено — економія до 90%</p>
+                    </div>
+                    <div class="config-card">
+                        <h3>Мова</h3>
+                        <select id="lang-select">
+                            <option value="uk">Українська</option>
+                            <option value="en">English</option>
+                        </select>
+                    </div>
+                    <div class="config-card full-width">
+                        <h3>Конфіг ніші <span class="optional">(опціонально)</span></h3>
+                        <p class="config-hint">JSON з правилами генерації. Без нього — універсальний промпт.</p>
+                        <div class="config-upload">
+                            <label class="config-file-btn" for="config-input">Завантажити JSON</label>
+                            <input type="file" id="config-input" accept=".json" hidden>
+                            <span id="config-filename" class="config-filename">Файл не вибрано</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-generate" class="btn-primary">
+                    <span class="btn-icon">⚡</span>
+                    Запустити генерацію
+                </button>
+            </section>
+
+            <!-- STEP 3: Progress -->
+            <section id="step-progress" class="step hidden">
+                <div class="step-header">
+                    <span class="step-num">03</span>
+                    <h2>Генерація</h2>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-stats">
+                        <span id="progress-text">Підготовка...</span>
+                        <span id="progress-pct">0%</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STEP 4: Result -->
+            <section id="step-result" class="step hidden">
+                <div class="step-header">
+                    <span class="step-num">04</span>
+                    <h2>Результат</h2>
+                </div>
+                <div class="result-card">
+                    <div class="result-icon">✅</div>
+                    <p id="result-message"></p>
+                    <div id="result-stats" class="result-stats"></div>
+                    <button id="btn-download" class="btn-primary">
+                        <span class="btn-icon">📥</span>
+                        Завантажити файл
+                    </button>
+                    <button id="btn-restart" class="btn-secondary">Нова генерація</button>
+                </div>
+                <div id="result-errors" class="result-errors hidden"></div>
+            </section>
+        </main>
+
+        <footer>
+            <p>FeedGen v2.0 — Claude API · prompt caching · retry logic</p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
