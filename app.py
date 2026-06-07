@@ -37,8 +37,16 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 
 app = FastAPI(title="FeedGen", version="2.0")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+
+# Ensure required directories exist (prevents crash if not deployed correctly)
+BASE_DIR = Path(__file__).parent
+STATIC_DIR = BASE_DIR / "static"
+TEMPLATES_DIR = BASE_DIR / "templates"
+STATIC_DIR.mkdir(exist_ok=True)
+TEMPLATES_DIR.mkdir(exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 jobs = {}
 UPLOAD_DIR = Path(tempfile.gettempdir()) / "feedgen"
