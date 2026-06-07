@@ -54,7 +54,9 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Models that support prompt caching
 CACHE_SUPPORTED_MODELS = [
-    "claude-sonnet-4-20250514",
+    "claude-opus-4-8",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
     "claude-haiku-4-5-20251001",
 ]
 
@@ -201,7 +203,7 @@ async def start_generation(
     file_id: str = Form(...),
     config: UploadFile = File(None),
     config_text: str = Form(None),
-    model: str = Form("claude-sonnet-4-20250514"),
+    model: str = Form("claude-sonnet-4-6"),
     language: str = Form("uk"),
     column_map: str = Form(None),
 ):
