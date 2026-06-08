@@ -1,6 +1,6 @@
-// FeedGen v2 Frontend Logic
+// FeedGen v3 Frontend
 
-const $ = (sel) => document.querySelector(sel);
+const $ = (s) => document.querySelector(s);
 const show = (el) => el.classList.remove('hidden');
 const hide = (el) => el.classList.add('hidden');
 
@@ -8,6 +8,18 @@ let currentFileId = null;
 let currentJobId = null;
 let configFile = null;
 let detectedColumns = {};
+let missingGeneratable = [];
+let schema = { structurable: [], generatable: [], default_title_order: [] };
+let attrOrder = [];        // [{key, label, enabled}]
+let selectedGenAttrs = new Set();
+
+// Load schema on startup
+(async () => {
+    try {
+        const res = await fetch('/api/schema');
+        schema = await res.json();
+    } catch (e) { console.error('Schema load failed', e); }
+})();
 
 // =============================================================================
 // STEP 1: Upload
@@ -20,59 +32,190 @@ dropzone.addEventListener('click', () => fileInput.click());
 dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
 dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
+    e.preventDefault(); dropzone.classList.remove('dragover');
     if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
 });
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length) handleFile(e.target.files[0]);
-});
+fileInput.addEventListener('change', (e) => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
 async function handleFile(file) {
-    if (!file.name.match(/\.xlsx?$/i)) {
-        alert('Підтримуються лише .xlsx файли');
+    if (!file.name.match(/\.(xlsx?|csv|xml)$/i)) {
+        alert('Підтримуються XLSX, CSV, XML');
         return;
     }
+    dropzone.innerHTML = `<div class="upload-content"><div class="upload-icon">⏳</div><p>Аналізую...</p></div>`;
 
-    dropzone.innerHTML = `<div class="upload-content"><div class="upload-icon">⏳</div><p>Аналізую файл...</p></div>`;
-
-    const formData = new FormData();
-    formData.append('file', file);
-
+    const fd = new FormData();
+    fd.append('file', file);
     try {
-        const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+        const res = await fetch('/api/analyze', { method: 'POST', body: fd });
         if (!res.ok) throw new Error((await res.json()).detail);
-        const data = await res.json();
+        const d = await res.json();
 
-        currentFileId = data.file_id;
-        detectedColumns = data.detected_columns || {};
+        currentFileId = d.file_id;
+        detectedColumns = d.detected_columns || {};
+        missingGeneratable = d.missing_generatable || [];
 
-        dropzone.innerHTML = `<div class="upload-content"><div class="upload-icon">✅</div><p>${data.filename}</p></div>`;
+        dropzone.innerHTML = `<div class="upload-content"><div class="upload-icon">✅</div><p>${d.filename}</p><p class="upload-hint">${d.format.toUpperCase()}</p></div>`;
 
-        const infoEl = $('#file-info');
-        show(infoEl);
-        infoEl.querySelector('.file-stats').innerHTML = `
-            <div class="stat"><span class="stat-label">Рядків</span><span class="stat-value">${data.total_rows}</span></div>
-            <div class="stat"><span class="stat-label">Унікальних товарів</span><span class="stat-value">${data.unique_titles}</span></div>
+        show($('#file-info'));
+        $('#file-info').querySelector('.file-stats').innerHTML = `
+            <div class="stat"><span class="stat-label">Рядків</span><span class="stat-value">${d.total_rows}</span></div>
+            <div class="stat"><span class="stat-label">Унікальних товарів</span><span class="stat-value">${d.unique_titles}</span></div>
         `;
 
-        // Show detected columns
-        const requiredCols = ['title', 'description', 'product_type', 'color', 'material', 'gender'];
-        const colsHtml = requiredCols.map(col => {
-            const found = detectedColumns[col] !== undefined;
-            return `<span class="col-tag ${found ? 'found' : 'missing'}">${col}${found ? ' ✓' : ' ✗'}</span>`;
-        }).join('');
-        $('#detected-cols').innerHTML = `<span style="font-size:12px;color:var(--text-dim);width:100%;margin-bottom:4px;">Розпізнані колонки:</span>${colsHtml}`;
+        // Detected columns
+        const present = d.present_attributes || [];
+        const tagsHtml = present.map(c => `<span class="col-tag found">${c} ✓</span>`).join('');
+        $('#detected-cols').innerHTML = `<span style="font-size:12px;color:var(--text-dim);width:100%;margin-bottom:4px;">Знайдено у фіді:</span>${tagsHtml}`;
 
+        buildAttrOrder();
+        buildGenAttrs();
         show($('#step-config'));
-
     } catch (err) {
         dropzone.innerHTML = `<div class="upload-content"><div class="upload-icon">❌</div><p>${err.message}</p><p class="upload-hint">Спробуй ще раз</p></div>`;
     }
 }
 
 // =============================================================================
-// STEP 2: Config
+// STEP 2: Attribute ordering (drag-and-drop)
+// =============================================================================
+
+function buildAttrOrder() {
+    // Start from default order, include only attrs that make sense
+    const order = schema.default_title_order.length ? schema.default_title_order : ['brand', 'product_type', 'color'];
+    const labelMap = {};
+    schema.structurable.forEach(s => labelMap[s.key] = s.label);
+
+    attrOrder = order.map(key => ({
+        key,
+        label: labelMap[key] || key,
+        enabled: detectedColumns[key] !== undefined || key === 'brand' || key === 'product_type',
+    }));
+
+    // Add any structurable attrs not in default order (disabled by default)
+    schema.structurable.forEach(s => {
+        if (!attrOrder.find(a => a.key === s.key)) {
+            attrOrder.push({ key: s.key, label: s.label, enabled: false });
+        }
+    });
+
+    renderAttrOrder();
+}
+
+function renderAttrOrder() {
+    const list = $('#attr-order-list');
+    list.innerHTML = '';
+    attrOrder.forEach((attr, idx) => {
+        const li = document.createElement('li');
+        li.className = 'attr-order-item' + (attr.enabled ? '' : ' disabled');
+        li.draggable = true;
+        li.dataset.key = attr.key;
+        li.innerHTML = `
+            <span class="attr-drag-handle">⠿</span>
+            <span class="attr-order-num">${idx + 1}</span>
+            <span class="attr-name">${attr.label}</span>
+            <span class="attr-toggle ${attr.enabled ? 'on' : ''}" data-key="${attr.key}"></span>
+        `;
+        list.appendChild(li);
+    });
+
+    // Toggle handlers
+    list.querySelectorAll('.attr-toggle').forEach(t => {
+        t.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const key = t.dataset.key;
+            const attr = attrOrder.find(a => a.key === key);
+            attr.enabled = !attr.enabled;
+            renderAttrOrder();
+            updateTitlePreview();
+        });
+    });
+
+    // Drag handlers
+    let dragEl = null;
+    list.querySelectorAll('.attr-order-item').forEach(item => {
+        item.addEventListener('dragstart', () => { dragEl = item; item.classList.add('dragging'); });
+        item.addEventListener('dragend', () => {
+            item.classList.remove('dragging');
+            // Rebuild attrOrder from DOM
+            const newOrder = [...list.querySelectorAll('.attr-order-item')].map(el => {
+                const key = el.dataset.key;
+                return attrOrder.find(a => a.key === key);
+            });
+            attrOrder = newOrder;
+            renderAttrOrder();
+            updateTitlePreview();
+        });
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const after = getDragAfter(list, e.clientY);
+            if (after == null) list.appendChild(dragEl);
+            else list.insertBefore(dragEl, after);
+        });
+    });
+
+    updateTitlePreview();
+}
+
+function getDragAfter(list, y) {
+    const els = [...list.querySelectorAll('.attr-order-item:not(.dragging)')];
+    return els.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) return { offset, element: child };
+        return closest;
+    }, { offset: -Infinity }).element;
+}
+
+function updateTitlePreview() {
+    const enabled = attrOrder.filter(a => a.enabled).map(a => a.label);
+    const preview = enabled.length
+        ? enabled.map(l => `<strong>{${l}}</strong>`).join(' ')
+        : '<em>немає увімкнених атрибутів</em>';
+    $('#title-preview').innerHTML = `Приклад: ${preview}`;
+}
+
+// =============================================================================
+// STEP 2: Generatable attributes
+// =============================================================================
+
+function buildGenAttrs() {
+    const container = $('#gen-attrs-list');
+    selectedGenAttrs.clear();
+
+    // Only show generatable attrs that are MISSING from the feed
+    const labelMap = {};
+    schema.generatable.forEach(g => labelMap[g.key] = g.label);
+    const available = missingGeneratable.filter(k => labelMap[k]);
+
+    if (available.length === 0) {
+        container.innerHTML = '<span class="gen-attrs-empty">Усі атрибути вже присутні у фіді — доповнювати нічого.</span>';
+        return;
+    }
+
+    container.innerHTML = '';
+    available.forEach(key => {
+        const chip = document.createElement('div');
+        chip.className = 'gen-attr-chip';
+        chip.dataset.key = key;
+        chip.innerHTML = `<span class="check">＋</span> ${labelMap[key]}`;
+        chip.addEventListener('click', () => {
+            if (selectedGenAttrs.has(key)) {
+                selectedGenAttrs.delete(key);
+                chip.classList.remove('selected');
+                chip.querySelector('.check').textContent = '＋';
+            } else {
+                selectedGenAttrs.add(key);
+                chip.classList.add('selected');
+                chip.querySelector('.check').textContent = '✓';
+            }
+        });
+        container.appendChild(chip);
+    });
+}
+
+// =============================================================================
+// Config file
 // =============================================================================
 
 $('#config-input').addEventListener('change', (e) => {
@@ -82,34 +225,34 @@ $('#config-input').addEventListener('change', (e) => {
     }
 });
 
-// Update cache hint based on model
-$('#model-select').addEventListener('change', (e) => {
-    $('#cache-hint').textContent = '✓ Prompt caching увімкнено — економія до 90%';
-});
+// =============================================================================
+// Generate
+// =============================================================================
 
 $('#btn-generate').addEventListener('click', async () => {
     const btn = $('#btn-generate');
     btn.disabled = true;
     btn.innerHTML = '<span class="btn-icon">⏳</span> Запускаю...';
 
-    const formData = new FormData();
-    formData.append('file_id', currentFileId);
-    formData.append('model', $('#model-select').value);
-    formData.append('language', $('#lang-select').value);
-    formData.append('column_map', JSON.stringify(detectedColumns));
-    if (configFile) formData.append('config', configFile);
+    const titleOrder = attrOrder.filter(a => a.enabled).map(a => a.key);
+
+    const fd = new FormData();
+    fd.append('file_id', currentFileId);
+    fd.append('model', $('#model-select').value);
+    fd.append('language', $('#lang-select').value);
+    fd.append('column_map', JSON.stringify(detectedColumns));
+    fd.append('title_order', JSON.stringify(titleOrder));
+    fd.append('generate_attributes', JSON.stringify([...selectedGenAttrs]));
+    fd.append('output_format', $('#format-select').value);
+    if (configFile) fd.append('config', configFile);
 
     try {
-        const res = await fetch('/api/generate', { method: 'POST', body: formData });
+        const res = await fetch('/api/generate', { method: 'POST', body: fd });
         if (!res.ok) throw new Error((await res.json()).detail);
-        const data = await res.json();
-
-        currentJobId = data.job_id;
-        hide($('#step-upload'));
-        hide($('#step-config'));
-        show($('#step-progress'));
+        const d = await res.json();
+        currentJobId = d.job_id;
+        hide($('#step-upload')); hide($('#step-config')); show($('#step-progress'));
         pollStatus();
-
     } catch (err) {
         alert(`Помилка: ${err.message}`);
         btn.disabled = false;
@@ -118,67 +261,50 @@ $('#btn-generate').addEventListener('click', async () => {
 });
 
 // =============================================================================
-// STEP 3: Progress
+// Progress + Result
 // =============================================================================
 
 async function pollStatus() {
     try {
         const res = await fetch(`/api/status/${currentJobId}`);
-        const data = await res.json();
-
-        const pct = data.total > 0 ? Math.round((data.progress / data.total) * 100) : 0;
+        const d = await res.json();
+        const pct = d.total > 0 ? Math.round((d.progress / d.total) * 100) : 0;
         $('#progress-fill').style.width = `${pct}%`;
         $('#progress-pct').textContent = `${pct}%`;
-        $('#progress-text').textContent = data.message;
-
-        if (data.status === 'done') { showResult(data); return; }
-        if (data.status === 'error') { showError(data.message); return; }
+        $('#progress-text').textContent = d.message;
+        if (d.status === 'done') { showResult(d); return; }
+        if (d.status === 'error') { showError(d.message); return; }
         setTimeout(pollStatus, 1500);
-    } catch (err) {
-        setTimeout(pollStatus, 3000);
-    }
+    } catch (err) { setTimeout(pollStatus, 3000); }
 }
 
-// =============================================================================
-// STEP 4: Result
-// =============================================================================
-
-function showResult(data) {
-    hide($('#step-progress'));
-    show($('#step-result'));
-    $('#result-message').textContent = data.message;
-
-    // Show stats
-    if (data.stats) {
-        const s = data.stats;
-        const scoreDist = s.score_distribution || {};
-        const score5 = scoreDist['5'] || 0;
+function showResult(d) {
+    hide($('#step-progress')); show($('#step-result'));
+    $('#result-message').textContent = d.message;
+    if (d.stats) {
+        const s = d.stats;
+        const sd = s.score_distribution || {};
+        const genAttrs = (s.generated_attributes || []).length;
         $('#result-stats').innerHTML = `
             <div class="result-stat"><span class="result-stat-label">Всього рядків</span><span class="result-stat-value">${s.total_rows}</span></div>
             <div class="result-stat"><span class="result-stat-label">Унікальних</span><span class="result-stat-value">${s.unique_generated}/${s.unique_products}</span></div>
-            <div class="result-stat"><span class="result-stat-label">Оцінка 5/5</span><span class="result-stat-value">${score5}</span></div>
-            <div class="result-stat"><span class="result-stat-label">Fallback</span><span class="result-stat-value">${s.fallback_count}</span></div>
+            <div class="result-stat"><span class="result-stat-label">Оцінка 5/5</span><span class="result-stat-value">${sd['5'] || 0}</span></div>
+            <div class="result-stat"><span class="result-stat-label">Доповнено атрибутів</span><span class="result-stat-value">${genAttrs}</span></div>
         `;
     }
-
-    if (data.errors && data.errors.length > 0) {
-        const errEl = $('#result-errors');
-        show(errEl);
-        errEl.innerHTML = `<strong>Попередження (${data.errors.length}):</strong><br>` +
-            data.errors.slice(0, 20).map(e => `• ${e}`).join('<br>');
+    if (d.errors && d.errors.length) {
+        show($('#result-errors'));
+        $('#result-errors').innerHTML = `<strong>Попередження (${d.errors.length}):</strong><br>` +
+            d.errors.slice(0, 20).map(e => `• ${e}`).join('<br>');
     }
 }
 
-function showError(message) {
-    hide($('#step-progress'));
-    show($('#step-result'));
+function showError(msg) {
+    hide($('#step-progress')); show($('#step-result'));
     $('.result-icon').textContent = '❌';
-    $('#result-message').textContent = message;
+    $('#result-message').textContent = msg;
     hide($('#btn-download'));
 }
 
-$('#btn-download').addEventListener('click', () => {
-    window.location.href = `/api/download/${currentJobId}`;
-});
-
+$('#btn-download').addEventListener('click', () => { window.location.href = `/api/download/${currentJobId}`; });
 $('#btn-restart').addEventListener('click', () => location.reload());
