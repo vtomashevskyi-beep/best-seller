@@ -14,9 +14,9 @@
             <div class="logo">
                 <span class="logo-icon">⚡</span>
                 <span class="logo-text">FeedGen</span>
-                <span class="version">v2.0</span>
+                <span class="version">v3.0</span>
             </div>
-            <p class="tagline">AI-генератор заголовків та описів для товарних фідів</p>
+            <p class="tagline">AI-генератор заголовків, описів та атрибутів для товарних фідів</p>
         </header>
 
         <main>
@@ -29,9 +29,9 @@
                 <div class="upload-zone" id="dropzone">
                     <div class="upload-content">
                         <div class="upload-icon">📄</div>
-                        <p>Перетягни .xlsx файл сюди</p>
-                        <p class="upload-hint">або натисни для вибору</p>
-                        <input type="file" id="file-input" accept=".xlsx,.xls" hidden>
+                        <p>Перетягни файл сюди</p>
+                        <p class="upload-hint">XLSX, CSV або XML · або натисни для вибору</p>
+                        <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.xml" hidden>
                     </div>
                 </div>
                 <div id="file-info" class="file-info hidden">
@@ -46,15 +46,15 @@
                     <span class="step-num">02</span>
                     <h2>Налаштуй генерацію</h2>
                 </div>
+
                 <div class="config-grid">
                     <div class="config-card">
                         <h3>Модель</h3>
                         <select id="model-select">
                             <option value="claude-sonnet-4-6">Claude Sonnet 4.6 — баланс якості і ціни</option>
                             <option value="claude-haiku-4-5">Claude Haiku 4.5 — швидко і дешево</option>
-                            <option value="claude-opus-4-8">Claude Opus 4.8 — найвища якість</option>
                         </select>
-                        <p class="model-hint" id="cache-hint">✓ Prompt caching увімкнено — економія до 90%</p>
+                        <p class="model-hint">✓ Prompt caching — економія до 90%</p>
                     </div>
                     <div class="config-card">
                         <h3>Мова</h3>
@@ -63,19 +63,45 @@
                             <option value="en">English</option>
                         </select>
                     </div>
-                    <div class="config-card full-width">
-                        <h3>Конфіг ніші <span class="optional">(опціонально)</span></h3>
-                        <p class="config-hint">JSON з правилами генерації. Без нього — універсальний промпт.</p>
+                </div>
+
+                <!-- Attribute order (drag-and-drop) -->
+                <div class="config-card full-width">
+                    <h3>Структура заголовка <span class="optional">(перетягни для зміни порядку)</span></h3>
+                    <p class="config-hint">Атрибути збираються в заголовок у цьому порядку. Перетягни щоб змінити, клікни щоб увімкнути/вимкнути.</p>
+                    <ul id="attr-order-list" class="attr-order-list"></ul>
+                    <div id="title-preview" class="title-preview"></div>
+                </div>
+
+                <!-- Attribute generation -->
+                <div class="config-card full-width">
+                    <h3>Доповнити відсутні атрибути <span class="optional">(опціонально)</span></h3>
+                    <p class="config-hint">AI спробує визначити ці атрибути з даних товару і додати у фід. Доступні лише відсутні у фіді поля.</p>
+                    <div id="gen-attrs-list" class="gen-attrs-list"></div>
+                </div>
+
+                <!-- Export format & config -->
+                <div class="config-grid">
+                    <div class="config-card">
+                        <h3>Формат експорту</h3>
+                        <select id="format-select">
+                            <option value="xlsx">XLSX (Excel)</option>
+                            <option value="csv">CSV</option>
+                            <option value="xml">XML (Google Shopping)</option>
+                        </select>
+                    </div>
+                    <div class="config-card">
+                        <h3>Конфіг ніші <span class="optional">(опц.)</span></h3>
                         <div class="config-upload">
-                            <label class="config-file-btn" for="config-input">Завантажити JSON</label>
+                            <label class="config-file-btn" for="config-input">JSON</label>
                             <input type="file" id="config-input" accept=".json" hidden>
-                            <span id="config-filename" class="config-filename">Файл не вибрано</span>
+                            <span id="config-filename" class="config-filename">Не вибрано</span>
                         </div>
                     </div>
                 </div>
+
                 <button id="btn-generate" class="btn-primary">
-                    <span class="btn-icon">⚡</span>
-                    Запустити генерацію
+                    <span class="btn-icon">⚡</span> Запустити генерацію
                 </button>
             </section>
 
@@ -86,9 +112,7 @@
                     <h2>Генерація</h2>
                 </div>
                 <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill"></div>
-                    </div>
+                    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
                     <div class="progress-stats">
                         <span id="progress-text">Підготовка...</span>
                         <span id="progress-pct">0%</span>
@@ -107,8 +131,7 @@
                     <p id="result-message"></p>
                     <div id="result-stats" class="result-stats"></div>
                     <button id="btn-download" class="btn-primary">
-                        <span class="btn-icon">📥</span>
-                        Завантажити файл
+                        <span class="btn-icon">📥</span> Завантажити файл
                     </button>
                     <button id="btn-restart" class="btn-secondary">Нова генерація</button>
                 </div>
@@ -117,7 +140,7 @@
         </main>
 
         <footer>
-            <p>FeedGen v2.0 — Claude API · prompt caching · retry logic</p>
+            <p>FeedGen v3.0 — Claude API · мульти-формат · доповнення атрибутів</p>
         </footer>
     </div>
 
