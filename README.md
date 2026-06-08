@@ -1,30 +1,36 @@
-# FeedGen v2.0
+# FeedGen v3.0
 
-AI-генератор заголовків та описів для товарних фідів Google Merchant Center на базі Claude API. **Універсальний** — працює з будь-якою товарною категорією (одяг, електроніка, книги, меблі тощо).
+Універсальний AI-генератор для товарних фідів Google Merchant Center на базі Claude API. Працює з будь-якою товарною категорією.
 
-## Що нового у v2.0
+## Що нового у v3.0
 
-- **Універсальний движок** — жодної прив'язки до ніші. Атрибути товару передаються в промпт динамічно: для одягу це колір/матеріал/розмір, для електроніки — gtin/стан/ціна, і т.д. Сервіс бере тільки ті поля, що є у фіді.
-- **Prompt caching** — system prompt кешується, економія до 90% на input токенах.
-- **Retry logic** — exponential backoff (2/4/8 сек) при rate limit та серверних помилках.
-- **Dynamic column detection** — автоматично розпізнає структуру фіду за назвами колонок (UA та EN aliases). Працює з будь-яким стандартним GMC фідом.
-- **Result validation** — перевірка довжини title, заборонених слів (з конфігу), унікальності.
-- **Статистика** — унікальність, fallback count, розподіл оцінок.
+**1. Мульти-формат імпорту/експорту**
+Тепер сервіс приймає XLSX, CSV та XML (формат Google Shopping RSS). Експортувати результат можна в будь-якому з цих форматів незалежно від формату імпорту. CSV автоматично визначає роздільник (кома/крапка з комою/таб) і кодування (UTF-8, CP1251).
 
-## Кастомізація під нішу/бренд
+**2. Налаштування структури заголовка (drag-and-drop)**
+На кроці налаштувань є список атрибутів, які можна перетягувати щоб задати порядок їх появи в заголовку. Кожен атрибут можна увімкнути/вимкнути перемикачем. Внизу показується live-превʼю структури. Порядок передається в AI як інструкція.
 
-Сервіс універсальний за замовчуванням. Щоб заточити під конкретний бренд — завантаж JSON-конфіг ніші при генерації. Конфіг стає system prompt і може містити: tone of voice, заборонені слова, правила структури title, граматичні таблиці тощо.
+**3. Доповнення відсутніх атрибутів**
+Якщо у фіді бракує стандартних GMC-атрибутів (color, material, gender, age_group, size, pattern, product_type, google_product_category тощо), сервіс пропонує їх згенерувати. AI визначає значення з даних товару і додає окремими колонками. Неповний фід стає повноцінним. Показуються лише ті атрибути, яких реально немає у фіді.
 
-Banned words для валідації беруться з конфігу автоматично — підтримуються поля `banned_words` (top-level), `tone_of_voice.banned_words`, `tone_of_voice.word_taboos`, `brand_config.banned_words`. Тобто будь-яка структура конфігу спрацює.
+**4. Прибрано орієнтацію на нішу одягу**
+Інтерфейс і движок працюють з повним набором з 20 GMC-атрибутів, а не з фіксованим clothing-набором. Для електроніки будуть свої поля, для книг свої.
+
+**5. Opus прибрано**
+Залишились Sonnet 4.6 і Haiku 4.5 (Opus 4.8 має інший API без temperature, несумісний з поточною логікою).
+
+## Збережені фічі v2
+
+Prompt caching (економія до 90%), retry logic з exponential backoff, dynamic column detection, валідація результатів, статистика генерації.
 
 ## Структура
 
 ```
-feedgen-v2/
+feedgen-v3/
 ├── Dockerfile
 ├── requirements.txt
 ├── .gitignore
-├── app.py              # Бекенд (FastAPI)
+├── app.py
 ├── templates/
 │   └── index.html
 └── static/
@@ -35,50 +41,42 @@ feedgen-v2/
 ## Деплой на Railway
 
 1. Завантаж вміст папки (не саму папку) в GitHub репозиторій
-2. Railway → New Project → Deploy from GitHub
+2. Railway → Deploy from GitHub
 3. Settings → Build → Builder: **Dockerfile**
-4. Variables → додай `ANTHROPIC_API_KEY=sk-ant-...`
-5. Settings → Networking → Generate Domain (target port 8000)
+4. Variables → `ANTHROPIC_API_KEY=sk-ant-...`
+5. Settings → Networking → Generate Domain (port 8000)
 
-## Локальний запуск
+## API Endpoints
 
-```bash
-pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
-uvicorn app:app --host 0.0.0.0 --port 8000
-```
+- `GET /` — головна
+- `GET /api/schema` — список атрибутів (структуровані + генеровані)
+- `POST /api/analyze` — аналіз фіду (xlsx/csv/xml), повертає present/missing атрибути
+- `POST /api/generate` — запуск генерації з опціями (title_order, generate_attributes, output_format)
+- `GET /api/status/{job_id}` — статус
+- `GET /api/download/{job_id}` — завантаження в обраному форматі
+- `GET /api/health` — health check
 
-Відкрий http://localhost:8000
+## Повний набір GMC-атрибутів
 
-## Prompt caching — як працює
+Розпізнаються і обробляються: id, title, description, link, image_link, product_type, google_product_category, brand, gtin, mpn, color, material, gender, age_group, size, pattern, condition, price, availability, product_highlight.
 
-System prompt (JSON-конфіг ніші) позначається `cache_control: ephemeral`. Перший запит записує кеш (1.25x вартості), наступні читають з кешу (0.1x). Оскільки конфіг однаковий для всіх товарів у фіді, економія величезна.
+Генеровані (можуть доповнюватись): product_type, google_product_category, brand, color, material, gender, age_group, size, pattern, condition, product_highlight.
 
-Кеш живе 5 хвилин між запитами. При генерації 262 товарів підряд (з паузою 0.1 сек) кеш не встигає протухнути.
-
-## Вартість (реальна, на фіді ~1000 рядків / ~260 унікальних товарів)
+## Вартість
 
 | Модель | Без кешу | З кешем |
 |--------|----------|---------|
 | Haiku 4.5 | ~$5.70 | ~$1.00 |
-| Sonnet 4 | ~$17.30 | ~$3.00 |
+| Sonnet 4.6 | ~$17 | ~$3.00 |
 
-Вартість залежить від розміру конфігу ніші (більший конфіг = дорожчий system prompt, але кешування нівелює різницю). Railway: $5/міс (Hobby план).
+(на фіді ~1000 рядків / ~260 унікальних товарів). Railway: $5/міс.
 
-## API Endpoints
-
-- `GET /` — головна сторінка
-- `POST /api/analyze` — аналіз фіду, повертає структуру і розпізнані колонки
-- `POST /api/generate` — запуск генерації (фоновий task)
-- `GET /api/status/{job_id}` — статус генерації
-- `GET /api/download/{job_id}` — завантаження результату
-- `GET /api/health` — health check
-
-## Що ще можна додати (TODO)
+## TODO для подальшого розвитку
 
 - Batch API для фідів 10k+ (50% знижка)
 - Persistent storage (Redis/PostgreSQL) замість in-memory jobs
 - Авторизація користувачів
 - Preview результатів перед скачуванням
-- UI для ручного маппінгу колонок (якщо автодетект помилився)
-- Конфіг-білдер замість завантаження JSON
+- Підтримка Opus 4.8 (адаптувати виклик під новий API без temperature)
+- Google Sheets імпорт/експорт
+- Збереження пресетів структури title для повторного використання
