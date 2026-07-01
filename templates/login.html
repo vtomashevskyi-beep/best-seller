@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FeedGen — Вхід</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .login-card {
+            max-width: 400px;
+            margin: 80px auto;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px 36px;
+            text-align: center;
+        }
+        .login-logo { font-size: 40px; margin-bottom: 8px; }
+        .login-title { font-size: 24px; font-weight: 700; margin-bottom: 6px; }
+        .login-sub { color: var(--text-dim); font-size: 14px; margin-bottom: 32px; }
+        .login-input {
+            width: 100%; background: var(--surface-2);
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px 16px; color: var(--text);
+            font-family: var(--font); font-size: 14px;
+            margin-bottom: 16px; box-sizing: border-box;
+            letter-spacing: 0.05em;
+        }
+        .login-input:focus { outline: none; border-color: var(--accent); }
+        .login-error {
+            color: var(--error); font-size: 13px;
+            margin-bottom: 16px; display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div class="login-card">
+            <div class="login-logo">⚡</div>
+            <div class="login-title">FeedGen</div>
+            <div class="login-sub">Введи токен доступу для входу</div>
+
+            <form method="POST" action="/api/login" id="login-form">
+                <input
+                    type="password"
+                    name="token"
+                    class="login-input"
+                    placeholder="feedgen_••••••••••••••••"
+                    autocomplete="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                    required
+                >
+                <div class="login-error" id="error-msg">Невірний токен. Спробуй ще раз.</div>
+                <button type="submit" class="btn-primary">
+                    <span class="btn-icon">→</span> Увійти
+                </button>
+            </form>
+
+            <p style="margin-top:24px;font-size:12px;color:var(--text-dim)">
+                Не маєш токена? Звернись до адміністратора сервісу.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Show error if redirected back with error param
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('error')) {
+            document.getElementById('error-msg').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

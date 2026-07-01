@@ -14,9 +14,15 @@
             <div class="logo">
                 <span class="logo-icon">⚡</span>
                 <span class="logo-text">FeedGen</span>
-                <span class="version">v3.0</span>
+                <span class="version">v4.0</span>
             </div>
             <p class="tagline">AI-генератор заголовків, описів та атрибутів для товарних фідів</p>
+            <div id="user-bar" style="display:none;margin-top:8px;font-size:12px;color:var(--text-dim);">
+                <span id="user-label"></span> ·
+                <form method="POST" action="/api/logout" style="display:inline">
+                    <button type="submit" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;text-decoration:underline;padding:0">Вийти</button>
+                </form>
+            </div>
         </header>
 
         <main>
@@ -31,9 +37,9 @@
                         <div class="upload-icon">📄</div>
                         <p>Перетягни файл сюди</p>
                         <p class="upload-hint">XLSX, CSV або XML · або натисни для вибору</p>
-                        <input type="file" id="file-input" accept=".xlsx,.xls,.csv,.xml" hidden>
                     </div>
                 </div>
+                <input type="file" id="file-input" accept=".xlsx,.csv,.xml" hidden>
                 <div id="file-info" class="file-info hidden">
                     <div class="file-stats"></div>
                     <div id="detected-cols" class="detected-cols"></div>
@@ -100,9 +106,28 @@
                     </div>
                 </div>
 
-                <button id="btn-generate" class="btn-primary">
-                    <span class="btn-icon">⚡</span> Запустити генерацію
+                <!-- STEP 2.5: Preview before full run -->
+                <button id="btn-preview" class="btn-primary">
+                    <span class="btn-icon">🔍</span> Прев'ю на 5 товарах
                 </button>
+                <p class="config-hint" style="text-align:center;margin-top:8px;">
+                    Спочатку перевір якість на семплі - повна генерація коштує грошей.
+                </p>
+
+                <div id="preview-panel" class="preview-panel hidden">
+                    <div class="step-header" style="margin-top:24px;">
+                        <span class="step-num">2.5</span>
+                        <h2>Перевір результат</h2>
+                    </div>
+                    <div id="preview-stale-note" class="preview-stale hidden">
+                        ⚠ Налаштування змінились після прев'ю - семпл може не відповідати поточним параметрам.
+                    </div>
+                    <div id="preview-results"></div>
+                    <div id="preview-confirm-info" class="preview-confirm"></div>
+                    <button id="btn-generate" class="btn-primary">
+                        <span class="btn-icon">⚡</span> Запустити повну генерацію
+                    </button>
+                </div>
             </section>
 
             <!-- STEP 3: Progress -->
@@ -117,6 +142,7 @@
                         <span id="progress-text">Підготовка...</span>
                         <span id="progress-pct">0%</span>
                     </div>
+                    <button id="btn-cancel" class="btn-secondary btn-cancel">Скасувати (зберегти вже згенероване)</button>
                 </div>
             </section>
 
@@ -133,14 +159,14 @@
                     <button id="btn-download" class="btn-primary">
                         <span class="btn-icon">📥</span> Завантажити файл
                     </button>
-                    <button id="btn-restart" class="btn-secondary">Нова генерація</button>
+                    <button id="btn-restart" class="btn-secondary">Нова генерація (налаштування збережуться)</button>
                 </div>
                 <div id="result-errors" class="result-errors hidden"></div>
             </section>
         </main>
 
         <footer>
-            <p>FeedGen v3.0 — Claude API · мульти-формат · доповнення атрибутів</p>
+            <p>FeedGen v4.0 — Claude API · прев'ю перед запуском · скасування · часткові результати</p>
         </footer>
     </div>
 
