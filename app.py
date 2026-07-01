@@ -88,6 +88,7 @@ ALLOWED_INPUT_EXTS = {"xlsx", "csv", "xml"}
 ALLOWED_OUTPUT_FORMATS = {"xlsx", "csv", "xml"}
 ALLOWED_LANGUAGES = {"uk", "en"}
 ALLOWED_MODELS = {
+    "claude-sonnet-5",
     "claude-sonnet-4-6",
     "claude-haiku-4-5",
     "claude-haiku-4-5-20251001",
@@ -96,7 +97,11 @@ CACHE_SUPPORTED_MODELS = set(ALLOWED_MODELS)
 
 # Approx public pricing, USD per 1M tokens (input, output). Used ONLY for a
 # rough pre-run estimate shown to the user; actual billing is on Anthropic side.
+# Sonnet 5 intro pricing is $2/$10 through Aug 31 2026, then $3/$15 standard.
+# Using the standard (post-intro) rate here so the estimate doesn't quietly
+# become too low once the intro window ends.
 MODEL_PRICING = {
+    "claude-sonnet-5": (3.0, 15.0),
     "claude-sonnet-4-6": (3.0, 15.0),
     "claude-haiku-4-5": (1.0, 5.0),
     "claude-haiku-4-5-20251001": (1.0, 5.0),
@@ -738,7 +743,7 @@ async def preview_generation(
     file_id: str = Form(...),
     config: UploadFile = File(None),
     config_text: str = Form(None),
-    model: str = Form("claude-sonnet-4-6"),
+    model: str = Form("claude-sonnet-5"),
     language: str = Form("uk"),
     column_map: str = Form(None),
     title_order: str = Form(None),
@@ -858,7 +863,7 @@ async def start_generation(
     file_id: str = Form(...),
     config: UploadFile = File(None),
     config_text: str = Form(None),
-    model: str = Form("claude-sonnet-4-6"),
+    model: str = Form("claude-sonnet-5"),
     language: str = Form("uk"),
     column_map: str = Form(None),
     title_order: str = Form(None),
