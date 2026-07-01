@@ -95,6 +95,11 @@ ALLOWED_MODELS = {
 }
 CACHE_SUPPORTED_MODELS = set(ALLOWED_MODELS)
 
+# Models that reject non-default temperature/top_p/top_k with a 400 error.
+# Claude Sonnet 5 introduced this behavior change vs Sonnet 4.6 - it uses
+# adaptive thinking by default and no longer accepts manual sampling tuning.
+SONNET5_NO_SAMPLING_PARAMS = {"claude-sonnet-5"}
+
 # Approx public pricing, USD per 1M tokens (input, output). Used ONLY for a
 # rough pre-run estimate shown to the user; actual billing is on Anthropic side.
 # Sonnet 5 intro pricing is $2/$10 through Aug 31 2026, then $3/$15 standard.
@@ -1098,15 +1103,22 @@ async def call_claude_with_retry(client, model, system_blocks, product_data, gen
         + "\n".join(attr_lines)
     )
 
+    # Claude Sonnet 5 rejects non-default sampling params (temperature/top_p/top_k)
+    # with a 400 error - this is a real API behavior change, not a bug on our
+    # side. Older models still accept and benefit from a lower temperature for
+    # more consistent, less "creative" product copy, so we keep it for them.
+    create_kwargs = dict(
+        model=model,
+        max_tokens=1500,
+        system=system_blocks,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    if model not in SONNET5_NO_SAMPLING_PARAMS:
+        create_kwargs["temperature"] = 0.3
+
     for attempt in range(max_retries):
         try:
-            response = await client.messages.create(
-                model=model,
-                max_tokens=1500,
-                temperature=0.3,
-                system=system_blocks,
-                messages=[{"role": "user", "content": user_message}],
-            )
+            response = await client.messages.create(**create_kwargs)
             usage = None
             try:
                 u = response.usage
