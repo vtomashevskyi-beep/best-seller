@@ -1,38 +1,36 @@
-# FeedGen v3.0
+# FeedGen v4.0
 
-Універсальний AI-генератор для товарних фідів Google Merchant Center на базі Claude API. Працює з будь-якою товарною категорією.
+AI-генератор заголовків, описів та атрибутів для товарних фідів Google Merchant Center на базі Claude API. Універсальний - працює з будь-якою категорією товарів. Формати: XLSX, CSV, XML (Google Shopping).
 
-## Що нового у v3.0
+## Флоу користувача
 
-**1. Мульти-формат імпорту/експорту**
-Тепер сервіс приймає XLSX, CSV та XML (формат Google Shopping RSS). Експортувати результат можна в будь-якому з цих форматів незалежно від формату імпорту. CSV автоматично визначає роздільник (кома/крапка з комою/таб) і кодування (UTF-8, CP1251).
+1. Завантаж фід - сервіс сам розпізнає колонки (UA/EN aliases)
+2. Налаштуй структуру title (drag-and-drop), вибери атрибути для доповнення
+3. **Прев'ю на 5 товарах** - подивись якість і орієнтовну вартість повного запуску до того, як витрачати гроші
+4. Підтверди повну генерацію
+5. Скачай результат: всі оригінальні колонки + згенеровані
 
-**2. Налаштування структури заголовка (drag-and-drop)**
-На кроці налаштувань є список атрибутів, які можна перетягувати щоб задати порядок їх появи в заголовку. Кожен атрибут можна увімкнути/вимкнути перемикачем. Внизу показується live-превʼю структури. Порядок передається в AI як інструкція.
+Генерацію можна скасувати в процесі - вже згенероване збережеться в частковий файл. Налаштування (модель, мова, порядок атрибутів) запам'ятовуються між сесіями.
 
-**3. Доповнення відсутніх атрибутів**
-Якщо у фіді бракує стандартних GMC-атрибутів (color, material, gender, age_group, size, pattern, product_type, google_product_category тощо), сервіс пропонує їх згенерувати. AI визначає значення з даних товару і додає окремими колонками. Неповний фід стає повноцінним. Показуються лише ті атрибути, яких реально немає у фіді.
+## Основне під капотом
 
-**4. Прибрано орієнтацію на нішу одягу**
-Інтерфейс і движок працюють з повним набором з 20 GMC-атрибутів, а не з фіксованим clothing-набором. Для електроніки будуть свої поля, для книг свої.
-
-**5. Opus прибрано**
-Залишились Sonnet 4.6 і Haiku 4.5 (Opus 4.8 має інший API без temperature, несумісний з поточною логікою).
-
-## Збережені фічі v2
-
-Prompt caching (економія до 90%), retry logic з exponential backoff, dynamic column detection, валідація результатів, статистика генерації.
+- **AsyncAnthropic + паралельна генерація** (semaphore, дефолт 5 потоків) з prompt caching і прогрівом кешу
+- **Оцінка вартості** рахується з реальних токенів прев'ю, не з теорії
+- **Токен-авторизація** з ізоляцією клієнтів: чужі файли і job'и недоступні
+- **Валідація всього**: file_id, модель, формат, мова, розміри файлів, ліміт товарів
+- **defusedxml** для парсингу, захист від path traversal, rate limit на логін
+- Дедуплікація враховує атрибути варіантів (розмір/колір не злипаються при доповненні)
+- Валідація результату: довжина title, banned words (з конфігу ніші), дублікати
 
 ## Структура
 
 ```
-feedgen-v3/
-├── Dockerfile
+feedgen-v4/
+├── app.py              # бекенд (FastAPI)
 ├── requirements.txt
-├── .gitignore
-├── app.py
 ├── templates/
-│   └── index.html
+│   ├── index.html
+│   └── login.html
 └── static/
     ├── style.css
     └── app.js
@@ -40,43 +38,43 @@ feedgen-v3/
 
 ## Деплой на Railway
 
-1. Завантаж вміст папки (не саму папку) в GitHub репозиторій
-2. Railway → Deploy from GitHub
-3. Settings → Build → Builder: **Dockerfile**
-4. Variables → `ANTHROPIC_API_KEY=sk-ant-...`
+1. Залий вміст папки в GitHub репозиторій
+2. Railway → New Project → Deploy from GitHub
+3. Variables: `ANTHROPIC_API_KEY=sk-ant-...`
+4. Опційно: `ACCESS_TOKENS=token1:client1,token2:client2` (без цієї змінної доступ відкритий)
 5. Settings → Networking → Generate Domain (port 8000)
 
-## API Endpoints
+Інші env (опційно): `MAX_FEED_SIZE_MB=50`, `MAX_UNIQUE_PRODUCTS=3000`, `GENERATION_CONCURRENCY=5`, `COOKIE_INSECURE=1` (тільки для локального http).
 
-- `GET /` — головна
-- `GET /api/schema` — список атрибутів (структуровані + генеровані)
-- `POST /api/analyze` — аналіз фіду (xlsx/csv/xml), повертає present/missing атрибути
-- `POST /api/generate` — запуск генерації з опціями (title_order, generate_attributes, output_format)
-- `GET /api/status/{job_id}` — статус
-- `GET /api/download/{job_id}` — завантаження в обраному форматі
-- `GET /api/health` — health check
+Токени читаються при старті - зміна ACCESS_TOKENS вимагає redeploy.
 
-## Повний набір GMC-атрибутів
+## Локальний запуск
 
-Розпізнаються і обробляються: id, title, description, link, image_link, product_type, google_product_category, brand, gtin, mpn, color, material, gender, age_group, size, pattern, condition, price, availability, product_highlight.
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+export COOKIE_INSECURE=1
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
 
-Генеровані (можуть доповнюватись): product_type, google_product_category, brand, color, material, gender, age_group, size, pattern, condition, product_highlight.
+## API
 
-## Вартість
+- `POST /api/analyze` - аналіз фіду, структура і колонки
+- `POST /api/preview` - семпл на N товарів + оцінка вартості
+- `POST /api/generate` - повна генерація (background job)
+- `GET /api/status/{job_id}` - статус
+- `POST /api/cancel/{job_id}` - скасувати, зберегти часткові результати
+- `GET /api/download/{job_id}` - результат (частковий має суфікс _partial)
+- `POST /api/login`, `/api/logout`, `GET /api/me` - авторизація
+- `GET /api/schema`, `GET /api/health`
 
-| Модель | Без кешу | З кешем |
-|--------|----------|---------|
-| Haiku 4.5 | ~$5.70 | ~$1.00 |
-| Sonnet 4.6 | ~$17 | ~$3.00 |
+## Кастомізація під нішу
 
-(на фіді ~1000 рядків / ~260 унікальних товарів). Railway: $5/міс.
+JSON-конфіг ніші при генерації стає system prompt: tone of voice, заборонені слова, правила структури. Banned words підтягуються з `banned_words`, `tone_of_voice.banned_words`, `tone_of_voice.word_taboos`, `brand_config.banned_words`.
 
-## TODO для подальшого розвитку
+## TODO
 
+- Persistent storage (Redis) замість in-memory jobs
 - Batch API для фідів 10k+ (50% знижка)
-- Persistent storage (Redis/PostgreSQL) замість in-memory jobs
-- Авторизація користувачів
-- Preview результатів перед скачуванням
-- Підтримка Opus 4.8 (адаптувати виклик під новий API без temperature)
-- Google Sheets імпорт/експорт
-- Збереження пресетів структури title для повторного використання
+- Конфіг-білдер замість завантаження JSON
+- Ручний маппінг колонок при помилці автодетекту

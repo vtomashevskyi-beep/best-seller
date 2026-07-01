@@ -110,8 +110,12 @@ jobs = {}            # job_id -> {...}
 uploaded_files = {}  # file_id -> {"path", "ext", "client", "filename", "created"}
 
 
-def cleanup_old_files():
-    """Removes temp files and registry entries older than FILE_TTL_HOURS."""
+_last_cleanup_ts = 0.0
+CLEANUP_MIN_INTERVAL = 300  # не частіше раз на 5 хвилин, і тільки в фоновому треді
+
+
+def _cleanup_old_files_sync():
+    """Синхронна частина чистки - виконується в окремому треді, не в event loop."""
     cutoff = time.time() - FILE_TTL_HOURS * 3600
     removed = 0
     try:
@@ -129,6 +133,19 @@ def cleanup_old_files():
         uploaded_files.pop(fid, None)
     if removed:
         logger.info("cleanup: removed %d old temp files", removed)
+
+
+async def cleanup_old_files():
+    """Чистка старих файлів. Раніше виконувалась синхронно на КОЖЕН /api/analyze
+    і блокувала event loop, через що інші запити (навіть аналіз крихітних файлів)
+    зависали в черзі за нею. Тепер: (1) не частіше раз на 5 хв, (2) винесена
+    в окремий тред через asyncio.to_thread, щоб не тримати loop."""
+    global _last_cleanup_ts
+    now = time.time()
+    if now - _last_cleanup_ts < CLEANUP_MIN_INTERVAL:
+        return
+    _last_cleanup_ts = now
+    await asyncio.to_thread(_cleanup_old_files_sync)
 
 
 # =============================================================================
@@ -519,7 +536,7 @@ async def _read_upload_limited(file: UploadFile, max_size: int, what: str) -> by
 
 @app.post("/api/analyze")
 async def analyze_feed(request: Request, file: UploadFile = File(...)):
-    cleanup_old_files()
+    await cleanup_old_files()
 
     original_name = file.filename or "feed"
     ext = original_name.lower().rsplit(".", 1)[-1] if "." in original_name else ""
@@ -537,7 +554,7 @@ async def analyze_feed(request: Request, file: UploadFile = File(...)):
     client = get_client(request) or "open"
 
     try:
-        headers, data_rows = parse_feed_file(tmp_path, ext)
+        headers, data_rows = await asyncio.to_thread(parse_feed_file, tmp_path, ext)
         if not data_rows:
             raise HTTPException(400, "Файл порожній або не містить даних")
 
@@ -739,7 +756,7 @@ async def preview_generation(
     sample_size = max(1, min(int(sample_size or PREVIEW_DEFAULT_SIZE), PREVIEW_MAX_SIZE))
 
     meta = p["meta"]
-    headers, data_rows = parse_feed_file(Path(meta["path"]), meta["ext"])
+    headers, data_rows = await asyncio.to_thread(parse_feed_file, Path(meta["path"]), meta["ext"])
     col_map = p["col_map"] or detect_columns(headers)
     unique_products, _ = build_unique_products(data_rows, col_map, p["gen_attrs"])
     total_unique = len(unique_products)
@@ -1150,7 +1167,7 @@ async def run_generation(job_id, input_path, ext, api_key, model, language,
         system_blocks, use_caching = make_system_blocks(system_text, model)
         banned_words = extract_banned_words(niche_config)
 
-        headers, data_rows = parse_feed_file(Path(input_path), ext)
+        headers, data_rows = await asyncio.to_thread(parse_feed_file, Path(input_path), ext)
         col_map = col_map_override or detect_columns(headers)
 
         unique_products, row_keys = build_unique_products(data_rows, col_map, gen_attrs)
@@ -1247,7 +1264,7 @@ async def run_generation(job_id, input_path, ext, api_key, model, language,
             output_rows.append(out_row)
 
         output_path = UPLOAD_DIR / f"generated_{job_id}.{output_format}"
-        write_output(output_rows, out_headers, output_format, str(output_path))
+        await asyncio.to_thread(write_output, output_rows, out_headers, output_format, str(output_path))
 
         score_dist = Counter(g[3] for g in generated.values())
         unique_gen = len(set(g[0] for g in generated.values()))
