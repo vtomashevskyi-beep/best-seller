@@ -1130,7 +1130,18 @@ async def call_claude_with_retry(client, model, system_blocks, product_data, gen
                 }
             except Exception:
                 pass
-            text = response.content[0].text.strip()
+            # Claude Sonnet 5 has adaptive thinking on by default, so the
+            # response can include a "thinking" block before (or instead of)
+            # the "text" block. Blindly taking content[0] broke here - grab
+            # the first block that actually has non-empty text instead.
+            text = None
+            for block in response.content:
+                block_text = getattr(block, "text", None)
+                if block_text:
+                    text = block_text.strip()
+                    break
+            if text is None:
+                return None, None, {}, "empty_response: no text block in content", usage
             title, desc, attrs = parse_claude_response(text, gen_attrs)
             if title is not None:
                 return title, desc, attrs, None, usage
