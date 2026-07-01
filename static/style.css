@@ -452,3 +452,136 @@ footer {
 }
 .btn-cancel:hover { border-color: var(--error); color: var(--error); filter: brightness(1.2); }
 .btn-cancel:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Attribute order list (drag-and-drop) - was missing, causing the plain
+   bullet-list regression the user reported */
+.attr-order-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.attr-order-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: grab;
+    transition: border-color 0.15s, opacity 0.15s;
+}
+.attr-order-item:active { cursor: grabbing; }
+.attr-order-item:hover { border-color: var(--accent); }
+.attr-order-item.dragging {
+    opacity: 0.5;
+    border-color: var(--accent);
+}
+.attr-order-item.disabled { opacity: 0.45; }
+.attr-drag-handle {
+    color: var(--text-dim);
+    font-size: 16px;
+    line-height: 1;
+    user-select: none;
+}
+.attr-order-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    background: var(--accent-glow);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 5px;
+}
+.attr-name {
+    flex: 1;
+    font-size: 14px;
+}
+.attr-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+.attr-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.15s, background 0.15s;
+}
+.attr-toggle.on {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.attr-toggle.on::after {
+    background: white;
+    transform: translateX(16px);
+}
+
+/* Generatable attribute chips - was missing the same way */
+.gen-attrs-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.gen-attrs-empty {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-style: italic;
+}
+.gen-attr-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+}
+.gen-attr-chip:hover { border-color: var(--accent); }
+.gen-attr-chip .check {
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1;
+}
+.gen-attr-chip.selected {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.gen-attr-chip.selected .check { color: var(--accent); }
+
+.title-preview {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+.title-preview strong {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+
